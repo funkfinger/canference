@@ -1,8 +1,5 @@
 import AWS, { KinesisVideoSignalingChannels } from 'aws-sdk';
-import {
-  SignalingClient,
-  RTCPeerConnection,
-} from 'amazon-kinesis-video-streams-webrtc';
+import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
 
 import { channelARN, accessKeyId, secretAccessKey, region } from '../config';
 // to destructure config...
@@ -10,7 +7,7 @@ const ChannelARN = channelARN;
 
 const master = {};
 
-export default async (videoRef) => {
+export default async (videoRefMaster, videoRefRemote) => {
   // creates the video client...
   const videoClient = new AWS.KinesisVideo({
     region,
@@ -85,7 +82,72 @@ export default async (videoRef) => {
     })
   );
 
-  console.log('[MASTER] ICE servers: ', iceServers);
+  signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
+    console.log('[MASTER] Received SDP offer from client: ' + remoteClientId);
+
+    // master connects to viewer 1:N(up to 10)
+    // RTCPeerConnection is required for each viewer clients
+    const peerConnection = new RTCPeerConnection({ iceServers });
+    master.peerConnectionByClientId[remoteClientId] = peerConnection;
+
+    peerConnection.addEventListener('icecandidate', ({ candidate }) => {
+      if (candidate) {
+        console.log(
+          '[MASTER] Sending ICE candidate to client: ' + remoteClientId
+        );
+        signalingClient.sendIceCandidate(candidate, remoteClientId);
+      }
+    });
+
+    peerConnection.addEventListener('track', ({ track }) => {
+      console.warn(
+        '[MASTER] Received remote track from client: ' + remoteClientId
+      );
+      const $media = document.createElement(track.kind);
+      $media.srcObject = new MediaStream([track]);
+      $media.play();
+      master.remoteViews.append($media);
+    });
+
+    master.localStream
+      .getTracks()
+      .forEach((track) => peerConnection.addTrack(track, master.localStream));
+    await peerConnection.setRemoteDescription(offer);
+
+    console.log('[MASTER] Creating SDP answer for client: ' + remoteClientId);
+    await peerConnection.setLocalDescription(
+      await peerConnection.createAnswer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      })
+    );
+
+    console.log('[MASTER] Sending SDP answer to client: ' + remoteClientId);
+    signalingClient.sendSdpAnswer(
+      peerConnection.localDescription,
+      remoteClientId
+    );
+  });
+
+  signalingClient.on('iceCandidate', async (candidate, remoteClientId) => {
+    console.log(
+      '[MASTER] Received ICE candidate from client: ' + remoteClientId
+    );
+
+    const peerConnection = master.peerConnectionByClientId[remoteClientId];
+    peerConnection.addIceCandidate(candidate);
+  });
+
+  signalingClient.on('close', () => {
+    console.log('[MASTER] Disconnected from signaling channel');
+  });
+
+  signalingClient.on('error', (err) => {
+    console.error('[MASTER] Signaling client error', err);
+  });
+
+  console.log('[MASTER] Starting master connection');
+  signalingClient.open();
 
   // get a stream from the webcam and display it in the local view
   try {
@@ -93,38 +155,10 @@ export default async (videoRef) => {
       video: true,
       audio: true,
     });
-    videoRef.srcObject = master.localStream;
+    videoRefMaster.srcObject = master.localStream;
+    videoRefMaster.muted = true;
   } catch (e) {
     console.error('[MASTER] Could not find webcam');
   }
-  videoRef.muted = true;
-  await videoRef.play();
-
-  // signalingClient on open event here...
-
-  // signalingClient on sdpOffer event...
-  signalingClient.on('sdpOffer', async (offer, remoteClientId) => {
-    console.log('remoteClientId: ', remoteClientId);
-    const peerConnection = new RTCPeerConnection({
-      iceServers,
-      iceTransportPolicy: 'all',
-    });
-    master.peerConnectionByClientId[remoteClientId] = peerConnection;
-
-    // send ice candidates to the other peer...
-    peerConnection.addEventListener('icecandidate', ({ candidate }) => {
-      if (candidate) {
-        console.log('doing peer connection: ', remoteClientId);
-        signalingClient.sendSdpAnswer(
-          peerConnection.localDescription,
-          remoteClientId
-        );
-      }
-    });
-  });
-
-  // const configuration = {
-  //   iceServers,
-  //   iceTransportPolicy: 'all',
-  // };
+  // await videoRefMaster.play();
 };

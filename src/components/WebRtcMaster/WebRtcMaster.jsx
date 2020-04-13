@@ -15,8 +15,25 @@ const WebRtcMaster = () => {
 
   return (
     <div className="wtc-video">
-      <video ref={videoRefMaster}></video>
-      <video ref={videoRefLocal}></video>
+      <video
+        className="master-video"
+        ref={videoRefMaster}
+        autoPlay
+        playsInline
+        controls
+        muted
+        height="480"
+        width="640"
+      ></video>
+      <video
+        className="viewer-video"
+        ref={videoRefLocal}
+        autoPlay
+        playsInline
+        controls
+        height="480"
+        width="640"
+      ></video>
     </div>
   );
 };
