@@ -4,13 +4,11 @@ import {
   RTCPeerConnection,
 } from 'amazon-kinesis-video-streams-webrtc';
 
-import { channelARN, accessKeyId, secretAccessKey, region } from '../config';
-// to destructure config...
-const ChannelARN = channelARN;
+import { accessKeyId, secretAccessKey, region } from '../config';
 
 const master = {};
 
-export default async (videoRef) => {
+export default async (masterVideoRef, viewerVideoRef, ChannelName) => {
   // creates the video client...
   const videoClient = new AWS.KinesisVideo({
     region,
@@ -18,8 +16,32 @@ export default async (videoRef) => {
     secretAccessKey,
   });
 
-  // should probably create the signaling channel here..
-  // using describeSignalingChannel and getting the channel ARN...
+  let sigChanResp = null;
+  try {
+    // NOTE: this will throw a 404 error in the console if the signaling channel doesn't exist - this is unavoidable - may want to look at the implementation of this in the future...
+    sigChanResp = await videoClient
+      .describeSignalingChannel({
+        ChannelName,
+      })
+      .promise();
+  } catch (error) {
+    // signaling channel doesn't exist, set it...
+    let t = await videoClient.createSignalingChannel({ ChannelName }).promise();
+    console.log(t);
+  } finally {
+    sigChanResp = sigChanResp
+      ? sigChanResp
+      : await videoClient
+          .describeSignalingChannel({
+            ChannelName,
+          })
+          .promise();
+  }
+
+  console.log(sigChanResp);
+
+  const channelARN = sigChanResp.ChannelInfo.ChannelARN;
+  const ChannelARN = channelARN;
 
   // makes the call to aws to get the endpoints - returns a promise...
   const getEndpoints = await videoClient
@@ -85,7 +107,7 @@ export default async (videoRef) => {
     })
   );
 
-  console.log('[MASTER] ICE servers: ', iceServers);
+  console.log('ice servers: ', iceServers);
 
   // get a stream from the webcam and display it in the local view
   try {
@@ -93,12 +115,12 @@ export default async (videoRef) => {
       video: true,
       audio: true,
     });
-    videoRef.srcObject = master.localStream;
+    masterVideoRef.srcObject = master.localStream;
   } catch (e) {
-    console.error('[MASTER] Could not find webcam');
+    console.error("can't find webcam");
   }
-  videoRef.muted = true;
-  await videoRef.play();
+  masterVideoRef.muted = true;
+  await masterVideoRef.play();
 
   // signalingClient on open event here...
 
