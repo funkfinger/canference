@@ -2,12 +2,13 @@ import React from 'react';
 import qs from 'qs';
 
 import WebRtcMaster from './components/WebRtcMaster/WebRtcMaster';
+import WebRtcViewer from './components/WebRtcViewer/WebRtcViewer';
 
 const App = () => {
   const querystring = qs.parse(window.location.search.slice(1));
   let mode = <WebRtcMaster />;
   if (querystring.sc) {
-    mode = <WebRtcMaster sc={querystring.sc} />;
+    mode = <WebRtcViewer sc={querystring.sc} />;
   }
   return (
     <div className="App">

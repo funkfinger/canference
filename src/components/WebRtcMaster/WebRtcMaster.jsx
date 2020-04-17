@@ -30,10 +30,19 @@ const WebRtcMaster = (props) => {
 
   return (
     <div className="wtc-video">
+      <h2>Master</h2>
+      <p>remote view:</p>
       <video ref={videoRefMaster}></video>
+      <p>local view:</p>
       <video ref={videoRefLocal}></video>
       <h4>SignalingChannelName: {signalingChannelName}</h4>
-      <h4>props.sc: {props.sc}</h4>
+      <p>{document.location.href}</p>
+      <a
+        href={`${document.location.href}?sc=${signalingChannelName}`}
+        target="new"
+      >
+        link is: {`${document.location.href}?sc=${signalingChannelName}`}
+      </a>
     </div>
   );
 };
