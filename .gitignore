@@ -25,3 +25,5 @@ yarn-error.log*
 config.js
 
 aws-exports.js
+
+report.*.json
