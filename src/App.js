@@ -13,7 +13,7 @@ const App = () => {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Canference</h1>
+        <h1>Canference - {process.env.REACT_APP_ACCESS_KEY_ID}</h1>
         {mode}
       </header>
     </div>

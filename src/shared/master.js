@@ -1,7 +1,10 @@
 import AWS, { KinesisVideoSignalingChannels } from 'aws-sdk';
 import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
 
-import { accessKeyId, secretAccessKey, region } from '../config';
+// import { accessKeyId, secretAccessKey, region } from '../config';
+const accessKeyId = process.env.REACT_APP_ACCESS_KEY_ID;
+const secretAccessKey = process.env.REACT_APP_SECRET_ACCESS_KEY;
+const region = process.env.REACT_APP_REGION;
 
 const master = {
   peerConnectionByClientId: {},
