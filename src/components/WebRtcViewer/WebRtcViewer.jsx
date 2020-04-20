@@ -17,9 +17,9 @@ const WebRtcViewer = (props) => {
     <div className="wtc-video-viewer">
       <h2>Viewer</h2>
       <p>remote view:</p>
-      <video ref={videoRefViewer}></video>
+      <video muted ref={videoRefViewer}></video>
       <p>local view:</p>
-      <video ref={videoRefLocal}></video>
+      <video muted ref={videoRefLocal}></video>
       <h4>props.sc: {props.sc}</h4>
       <p>{document.location.href}</p>
     </div>

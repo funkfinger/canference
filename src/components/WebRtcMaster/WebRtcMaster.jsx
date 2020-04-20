@@ -32,9 +32,9 @@ const WebRtcMaster = (props) => {
     <div className="wtc-video">
       <h2>Master</h2>
       <p>remote view:</p>
-      <video ref={videoRefMaster}></video>
+      <video muted ref={videoRefMaster}></video>
       <p>local view:</p>
-      <video ref={videoRefLocal}></video>
+      <video muted ref={videoRefLocal}></video>
       <h4>SignalingChannelName: {signalingChannelName}</h4>
       <p>{document.location.href}</p>
       <a

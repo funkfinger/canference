@@ -94,16 +94,21 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
   signalingClient.on('open', async () => {
     console.log('[VIEWER] Connected to signaling service');
 
-    const localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
-    localStream
-      .getTracks()
-      .forEach((track) => peerConnection.addTrack(track, localStream));
-    localVideoRef.srcObject = localStream;
-    localVideoRef.muted = true;
-    await localVideoRef.play();
+    try {
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      localStream
+        .getTracks()
+        .forEach((track) => peerConnection.addTrack(track, localStream));
+      localVideoRef.srcObject = localStream;
+      localVideoRef.muted = true;
+      await localVideoRef.play();
+    } catch (e) {
+      console.error('[VIEWER] Could not find webcam');
+      return;
+    }
 
     console.log('[VIEWER] Creating SDP offer');
     await peerConnection.setLocalDescription(
@@ -122,11 +127,12 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
 
   signalingClient.on('sdpAnswer', async (answer) => {
     console.log('[VIEWER] Received SDP answer');
+    console.log(answer);
     await peerConnection.setRemoteDescription(answer);
   });
 
   signalingClient.on('iceCandidate', (candidate) => {
-    console.log('[VIEWER] Received ICE candidate');
+    console.log('[VIEWER] Received ICE candidate', candidate);
     peerConnection.addIceCandidate(candidate);
   });
 
@@ -141,8 +147,12 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
   // Send any ICE candidates to the other peer
   peerConnection.addEventListener('icecandidate', ({ candidate }) => {
     if (candidate) {
-      console.log('[VIEWER] Sending ICE candidate - ', candidate);
-      signalingClient.sendIceCandidate(candidate);
+      // ****** trickle ice...
+      // console.log('[VIEWER] Sending ICE candidate - ', candidate);
+      // signalingClient.sendIceCandidate(candidate);
+
+      console.log('[VIEWER] Sending SDP offer');
+      signalingClient.sendSdpOffer(peerConnection.localDescription);
     }
   });
 

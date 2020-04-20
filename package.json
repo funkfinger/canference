@@ -17,6 +17,7 @@
     "rtcpeerconnection": "^8.4.0"
   },
   "scripts": {
+    "sstart": "HTTPS=true yarn start",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",

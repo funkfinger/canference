@@ -138,7 +138,8 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
     peerConnection.addEventListener('icecandidate', ({ candidate }) => {
       if (candidate) {
         console.log('doing peer connection: ', remoteClientId);
-        signalingClient.sendIceCandidate(candidate, remoteClientId);
+        // ******* trickle ice...
+        // signalingClient.sendIceCandidate(candidate, remoteClientId);
         signalingClient.sendSdpAnswer(
           peerConnection.localDescription,
           remoteClientId
@@ -146,14 +147,19 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
       }
     });
 
-    peerConnection.addEventListener('track', ({ track }) => {
+    peerConnection.addEventListener('track', (event) => {
       console.warn(
         '[MASTER] Received remote track from client: ' + remoteClientId
       );
-      const $media = document.createElement(track.kind);
-      $media.srcObject = new MediaStream([track]);
-      $media.play();
-      remoteVideoRef.append($media);
+      console.log(event);
+      if (remoteVideoRef.srcObject) {
+        return;
+      }
+      // const $media = document.createElement(track.kind);
+      // $media.srcObject = new MediaStream([track]);
+      // $media.play();
+      // remoteVideoRef.append($media);
+      remoteVideoRef.srcObject = event.streams[0];
     });
 
     const tracks = master.localStream.getTracks();
