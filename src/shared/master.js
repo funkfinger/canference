@@ -1,5 +1,11 @@
-import AWS, { KinesisVideoSignalingChannels } from 'aws-sdk';
 import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
+
+import {
+  getKinesisVideo,
+  getChannelARN,
+  getEndpoints,
+  getIceServers,
+} from './setup-web-rtc';
 
 // import { accessKeyId, secretAccessKey, region } from '../config';
 const accessKeyId = process.env.REACT_APP_ACCESS_KEY_ID;
@@ -12,92 +18,27 @@ const master = {
 
 export default async (remoteVideoRef, localVideoRef, ChannelName) => {
   // creates the video client...
-  const videoClient = new AWS.KinesisVideo({
-    region,
-    accessKeyId,
-    secretAccessKey,
-  });
-
-  let sigChanResp = null;
-  try {
-    // NOTE: this will throw a 404 error (from the amazon API) in the console if the signaling channel doesn't exist - this is unavoidable - may want to look at the implementation of this in the future...
-    sigChanResp = await videoClient
-      .describeSignalingChannel({
-        ChannelName,
-      })
-      .promise();
-  } catch (error) {
-    // signaling channel doesn't exist, set it...
-    let t = await videoClient.createSignalingChannel({ ChannelName }).promise();
-    console.log(t);
-  } finally {
-    sigChanResp = sigChanResp
-      ? sigChanResp
-      : await videoClient
-          .describeSignalingChannel({
-            ChannelName,
-          })
-          .promise();
-  }
-
-  console.log(sigChanResp);
-
-  const channelARN = sigChanResp.ChannelInfo.ChannelARN;
+  const vc = getKinesisVideo(accessKeyId, secretAccessKey, region);
+  // get the channel arn...
+  const channelARN = await getChannelARN(vc, ChannelName);
   const ChannelARN = channelARN; // for destructuring...
 
-  // makes the call to aws to get the endpoints - returns a promise...
-  const getEndpoints = await videoClient
-    .getSignalingChannelEndpoint({
-      ChannelARN,
-      SingleMasterChannelEndpointConfiguration: {
-        Protocols: ['WSS', 'HTTPS'],
-        Role: 'MASTER',
-      },
-    })
-    .promise();
-
-  // sort out the endpoints by protocol - WSS and HTTPS...
-  // simplify???
-  const endpointsByProtocol = getEndpoints.ResourceEndpointList.reduce(
-    (eps, ep) => {
-      eps[ep.Protocol] = ep.ResourceEndpoint;
-      return eps;
-    },
-    {}
-  );
-
-  // get signaling channels...
-  // client is just used for getting ICE servers, not for actual signaling
-  const signalingChannels = new KinesisVideoSignalingChannels({
-    region,
-    accessKeyId,
-    secretAccessKey,
-    endpoint: endpointsByProtocol.HTTPS,
-  });
+  // get endpoints...
+  const endpoints = await getEndpoints(vc, channelARN, 'MASTER');
 
   // get ice servers...
-  const getIceServers = await signalingChannels
-    .getIceServerConfig({ ChannelARN })
-    .promise();
-
-  // ice server list - first one is STUN, and then add TURN servers...
-  const iceServers = [
-    { urls: `stun:stun.kinesisvideo.${region}.amazonaws.com:443` },
-  ];
-  getIceServers.IceServerList.forEach((iceServer) =>
-    iceServers.push({
-      urls: iceServer.Uris,
-      username: iceServer.Username,
-      credential: iceServer.Password,
-    })
+  const iceServers = await getIceServers(
+    endpoints.HTTPS,
+    ChannelARN,
+    accessKeyId,
+    secretAccessKey,
+    region
   );
-
-  console.log('ice servers: ', iceServers);
 
   // create master signalingClient...
   const signalingClient = new SignalingClient({
     channelARN,
-    channelEndpoint: endpointsByProtocol.WSS,
+    channelEndpoint: endpoints.WSS,
     role: 'MASTER',
     region,
     credentials: {
