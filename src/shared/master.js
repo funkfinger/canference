@@ -1,3 +1,4 @@
+import Peer from 'simple-peer';
 import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
 
 import {
