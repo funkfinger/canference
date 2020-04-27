@@ -9,6 +9,7 @@ const region = process.env.REACT_APP_REGION;
 const viewer = {};
 
 export default async (viewerVideoRef, localVideoRef, ChannelName) => {
+  let isNegotiating = false; // Workaround for Chrome: skip nested negotiations
   // creates the video client...
   const videoClient = new AWS.KinesisVideo({
     region,
@@ -107,13 +108,14 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
         .forEach((track) => peerConnection.addTrack(track, localStream));
       localVideoRef.srcObject = localStream;
       localVideoRef.muted = true;
-      await localVideoRef.play();
+      //await localVideoRef.play();
     } catch (e) {
-      console.error('[VIEWER] Could not find webcam');
+      console.error('[VIEWER] Could not find webcam', e);
       return;
     }
 
     console.log('[VIEWER] Creating SDP offer');
+    isNegotiating = true;
     await peerConnection.setLocalDescription(
       await peerConnection.createOffer({
         offerToReceiveAudio: true,
@@ -131,7 +133,10 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
   signalingClient.on('sdpAnswer', async (answer) => {
     console.log('[VIEWER] Received SDP answer');
     console.log(answer);
-    await peerConnection.setRemoteDescription(answer);
+    console.log('got here: ', peerConnection.signalingState);
+    if (peerConnection.signalingState !== 'stable') {
+      await peerConnection.setRemoteDescription(answer);
+    }
   });
 
   signalingClient.on('iceCandidate', (candidate) => {
@@ -166,8 +171,13 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
       return;
     }
     viewerVideoRef.srcObject = event.streams[0];
-    viewerVideoRef.play();
+    //viewerVideoRef.play();
   });
+
+  peerConnection.onsignalingstatechange = (e) => {
+    // Workaround for Chrome: skip nested negotiations
+    isNegotiating = peerConnection.signalingState !== 'stable';
+  };
 
   console.log('[VIEWER] Starting viewer connection');
   signalingClient.open();

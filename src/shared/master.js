@@ -50,6 +50,9 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
 
   console.log('signalingClient: ', signalingClient);
 
+  const peer = new Peer({ initiator: true, config: { iceServers } });
+  console.log('peer.channelName: ', peer.channelName);
+
   // signalingClient on open event here...
   signalingClient.on('open', async () => {
     console.log('[MASTER] Connected to signaling service');

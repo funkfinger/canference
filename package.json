@@ -15,7 +15,8 @@
     "react-dom": "^16.13.1",
     "react-scripts": "3.4.1",
     "rtcpeerconnection": "^8.4.0",
-    "simple-peer": "^9.6.2"
+    "simple-peer": "^9.7.0",
+    "webrtc-adapter": "^7.5.1"
   },
   "scripts": {
     "sstart": "HTTPS=true yarn start",
