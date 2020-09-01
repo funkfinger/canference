@@ -1,5 +1,4 @@
 import { KinesisVideo, KinesisVideoSignalingChannels } from 'aws-sdk';
-import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
 
 export const getKinesisVideo = (accessKeyId, secretAccessKey, region) => {
   return new KinesisVideo({

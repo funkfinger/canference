@@ -1,60 +1,45 @@
-import AWS, { KinesisVideoSignalingChannels } from 'aws-sdk';
+import Peer from 'simple-peer';
 import { SignalingClient } from 'amazon-kinesis-video-streams-webrtc';
 
-// import { accessKeyId, secretAccessKey, region } from '../config';
+import {
+  getKinesisVideo,
+  getChannelARN,
+  getEndpoints,
+  getIceServers,
+} from './setup-web-rtc';
+
 const accessKeyId = process.env.REACT_APP_ACCESS_KEY_ID;
 const secretAccessKey = process.env.REACT_APP_SECRET_ACCESS_KEY;
 const region = process.env.REACT_APP_REGION;
 
-const viewer = {};
-
-export default async (viewerVideoRef, localVideoRef, ChannelName) => {
-  let isNegotiating = false; // Workaround for Chrome: skip nested negotiations
+export default async (
+  remoteVideoRef,
+  localVideoRef,
+  ChannelName,
+  localStream
+) => {
   // creates the video client...
-  const videoClient = new AWS.KinesisVideo({
-    region,
+  const vc = getKinesisVideo(accessKeyId, secretAccessKey, region);
+  // get the channel arn...
+  const channelARN = await getChannelARN(vc, ChannelName);
+  const ChannelARN = channelARN; // for destructuring...
+
+  // get endpoints...
+  const endpoints = await getEndpoints(vc, channelARN, 'VIEWER');
+
+  // get ice servers...
+  const iceServers = await getIceServers(
+    endpoints.HTTPS,
+    ChannelARN,
     accessKeyId,
     secretAccessKey,
-  });
-
-  // Get signaling channel ARN
-  const describeSignalingChannelResponse = await videoClient
-    .describeSignalingChannel({
-      ChannelName,
-    })
-    .promise();
-
-  const ChannelARN = describeSignalingChannelResponse.ChannelInfo.ChannelARN;
-  const channelARN = ChannelARN;
-  console.log('channel arn: ', ChannelARN);
-
-  // makes the call to aws to get the endpoints - returns a promise...
-  const getEndpoints = await videoClient
-    .getSignalingChannelEndpoint({
-      ChannelARN,
-      SingleMasterChannelEndpointConfiguration: {
-        Protocols: ['WSS', 'HTTPS'],
-        Role: 'VIEWER',
-      },
-    })
-    .promise();
-
-  // sort out the endpoints by protocol - WSS and HTTPS...
-  // simplify???
-  const endpointsByProtocol = getEndpoints.ResourceEndpointList.reduce(
-    (eps, ep) => {
-      eps[ep.Protocol] = ep.ResourceEndpoint;
-      return eps;
-    },
-    {}
+    region
   );
-
-  console.log('endpointsByProtocol: ', endpointsByProtocol);
 
   // create viewer signalingClient...
   const signalingClient = new SignalingClient({
     channelARN,
-    channelEndpoint: endpointsByProtocol.WSS,
+    channelEndpoint: endpoints.WSS,
     clientId: `c${Date.now()}`, // should be random
     role: 'VIEWER',
     region,
@@ -64,45 +49,15 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
     },
   });
 
-  viewer.signalingClient = signalingClient;
   console.log('signalingClient: ', signalingClient);
 
-  // if use STUN/TURN
-  const signalingChannels = new KinesisVideoSignalingChannels({
-    region,
-    accessKeyId,
-    secretAccessKey,
-    endpoint: endpointsByProtocol.HTTPS,
-  });
-  // get ice servers...
-  const getIceServers = await signalingChannels
-    .getIceServerConfig({ ChannelARN })
-    .promise();
-
-  // ice server list - first one is STUN, and then add TURN servers...
-  const iceServers = [
-    { urls: `stun:stun.kinesisvideo.${region}.amazonaws.com:443` },
-  ];
-  getIceServers.IceServerList.forEach((iceServer) =>
-    iceServers.push({
-      urls: iceServer.Uris,
-      username: iceServer.Username,
-      credential: iceServer.Password,
-    })
-  );
-
-  console.log('ice servers: ', iceServers);
-
+  const peer = new Peer({ initiator: true, config: { iceServers } });
   const peerConnection = new RTCPeerConnection({ iceServers });
 
   signalingClient.on('open', async () => {
     console.log('[VIEWER] Connected to signaling service');
 
     try {
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
       localStream
         .getTracks()
         .forEach((track) => peerConnection.addTrack(track, localStream));
@@ -115,7 +70,6 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
     }
 
     console.log('[VIEWER] Creating SDP offer');
-    isNegotiating = true;
     await peerConnection.setLocalDescription(
       await peerConnection.createOffer({
         offerToReceiveAudio: true,
@@ -167,17 +121,14 @@ export default async (viewerVideoRef, localVideoRef, ChannelName) => {
   // As remote tracks are received, add them to the remote view
   peerConnection.addEventListener('track', (event) => {
     console.log('[VIEWER] Received remote track');
-    if (viewerVideoRef.srcObject) {
+    if (remoteVideoRef.srcObject) {
       return;
     }
-    viewerVideoRef.srcObject = event.streams[0];
+    remoteVideoRef.srcObject = event.streams[0];
     //viewerVideoRef.play();
   });
 
-  peerConnection.onsignalingstatechange = (e) => {
-    // Workaround for Chrome: skip nested negotiations
-    isNegotiating = peerConnection.signalingState !== 'stable';
-  };
+  peerConnection.onsignalingstatechange = (e) => {};
 
   console.log('[VIEWER] Starting viewer connection');
   signalingClient.open();

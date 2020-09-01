@@ -8,16 +8,19 @@ import {
   getIceServers,
 } from './setup-web-rtc';
 
-// import { accessKeyId, secretAccessKey, region } from '../config';
 const accessKeyId = process.env.REACT_APP_ACCESS_KEY_ID;
 const secretAccessKey = process.env.REACT_APP_SECRET_ACCESS_KEY;
 const region = process.env.REACT_APP_REGION;
 
-const master = {
-  peerConnectionByClientId: {},
-};
+const peerConnectionByClientId = {};
 
-export default async (remoteVideoRef, localVideoRef, ChannelName) => {
+export default async (
+  remoteVideoRef,
+  localVideoRef,
+  ChannelName,
+  localStream,
+  role
+) => {
   // creates the video client...
   const vc = getKinesisVideo(accessKeyId, secretAccessKey, region);
   // get the channel arn...
@@ -25,7 +28,7 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
   const ChannelARN = channelARN; // for destructuring...
 
   // get endpoints...
-  const endpoints = await getEndpoints(vc, channelARN, 'MASTER');
+  const endpoints = await getEndpoints(vc, channelARN, role);
 
   // get ice servers...
   const iceServers = await getIceServers(
@@ -40,7 +43,8 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
   const signalingClient = new SignalingClient({
     channelARN,
     channelEndpoint: endpoints.WSS,
-    role: 'MASTER',
+    clientId: `c${Date.now()}`, // should be random
+    role,
     region,
     credentials: {
       accessKeyId,
@@ -55,7 +59,7 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
 
   // signalingClient on open event here...
   signalingClient.on('open', async () => {
-    console.log('[MASTER] Connected to signaling service');
+    console.log(`[${role}] Connected to signaling service`);
   });
 
   // signalingClient on sdpOffer event...
@@ -65,20 +69,12 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
       iceServers,
       iceTransportPolicy: 'all',
     });
-    master.peerConnectionByClientId[remoteClientId] = peerConnection;
+    peerConnectionByClientId[remoteClientId] = peerConnection;
     console.log('peerConnection: ', peerConnection);
     await peerConnection.setRemoteDescription(offer);
 
     // get a stream from the webcam and display it in the local view
-    try {
-      master.localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      localVideoRef.srcObject = master.localStream;
-    } catch (e) {
-      console.error("can't find webcam");
-    }
+    localVideoRef.srcObject = localStream;
     localVideoRef.muted = true;
     await localVideoRef.play();
 
@@ -110,11 +106,9 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
       remoteVideoRef.srcObject = event.streams[0];
     });
 
-    const tracks = master.localStream.getTracks();
+    const tracks = localStream.getTracks();
     console.log('tracks: ', tracks);
-    tracks.forEach((track) =>
-      peerConnection.addTrack(track, master.localStream)
-    );
+    tracks.forEach((track) => peerConnection.addTrack(track, localStream));
     await peerConnection.setRemoteDescription(offer);
 
     console.log('[MASTER] Creating SDP answer for client: ' + remoteClientId);
@@ -136,7 +130,7 @@ export default async (remoteVideoRef, localVideoRef, ChannelName) => {
     console.log(
       '[MASTER] Received ICE candidate from client: ' + remoteClientId
     );
-    const peerConnection = master.peerConnectionByClientId[remoteClientId];
+    const peerConnection = peerConnectionByClientId[remoteClientId];
     peerConnection.addIceCandidate(candidate);
   });
 

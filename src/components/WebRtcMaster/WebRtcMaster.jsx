@@ -1,48 +1,53 @@
-import React, { useEffect, useState } from 'react';
+import React, { useRef } from 'react';
+import Video from '../Video/Video';
 
 import master from '../../shared/master';
 
-const getChannelName = () => {
-  const name =
-    localStorage.getItem('signaling-channel-name') ||
-    Math.random().toString(36).substring(2).toUpperCase();
-  localStorage.setItem('signaling-channel-name', name);
-  return name;
-};
-
 const WebRtcMaster = (props) => {
-  console.log('props: ', props);
-  const videoRefMaster = React.createRef();
-  const videoRefLocal = React.createRef();
+  const videoRefRemote = useRef();
+  const videoRefLocal = useRef();
 
-  const [signalingChannelName] = useState(getChannelName());
+  const signalingChannelName = props.sc;
 
-  useEffect(() => {
-    const getEndpoints = async () => {
-      master(
-        videoRefMaster.current,
-        videoRefLocal.current,
-        signalingChannelName
-      );
-    };
-    getEndpoints();
-  }, [videoRefMaster, videoRefLocal, signalingChannelName]);
+  const start = async () => {
+    const localStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    console.log(videoRefLocal);
+    videoRefLocal.current.srcObject = localStream;
+    await master(
+      videoRefRemote.current,
+      videoRefLocal.current,
+      props.sc,
+      localStream,
+      props.mode
+    );
+  };
 
-  return (
-    <div className="wtc-video">
-      <h2>Master</h2>
-      <p>remote view:</p>
-      <video muted controls playsInline ref={videoRefMaster}></video>
-      <p>local view:</p>
-      <video muted controls playsInline ref={videoRefLocal}></video>
-      <h4>SignalingChannelName: {signalingChannelName}</h4>
-      <p>{document.location.href}</p>
+  const link =
+    props.mode === 'MASTER' ? (
       <a
         href={`${document.location.href}?sc=${signalingChannelName}`}
         target="new"
       >
         link is: {`${document.location.href}?sc=${signalingChannelName}`}
       </a>
+    ) : (
+      ''
+    );
+
+  return (
+    <div className="wtc-video">
+      <h2>{props.mode}</h2>
+      <p>remote view:</p>
+      <Video vidRef={videoRefRemote} />
+      <p>local view:</p>
+      <Video vidRef={videoRefLocal} />
+      <h4>SignalingChannelName: {signalingChannelName}</h4>
+      <p>{document.location.href}</p>
+      <button onClick={start}>start</button>
+      {link}
     </div>
   );
 };
